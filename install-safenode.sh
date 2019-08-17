@@ -1,7 +1,8 @@
 #!/bin/bash
+clear
 
 ######################################
-## SafeNode Setup Tool v0.10        ##
+## SafeNode Setup Tool v0.11        ##
 ## Special thanks to:               ##
 ## @Team Safe                       ##
 ## @Safers                          ##
@@ -12,7 +13,8 @@
 
 ### Check user
 if [ "$EUID" -eq 0 ]
-  then
+    then
+        clear
         echo -e "Warning: You should not run this as root! Create a new user with sudo permissions!\nThis can be done with (replace username with an actual username such as node):\nadduser username\nusermod -aG sudo username\nsu username\ncd ~\n\nYou will be in a new home directory. Make sure you redownload the script or move it from your /root directory!"
         exit
 fi
@@ -20,6 +22,7 @@ fi
 ### Check if safekey was added
 if [ -z "$1" ]
     then
+        clear
         echo -e "No SafeKey supplied. Start over with your SafeKey included..."
         exit
 fi
@@ -28,12 +31,13 @@ fi
 cd ~
 
 ### Kill any existing processes
-echo -e "Stopping any existing services..."
+sudo systemctl stop safecoinnode
 killall -9 safecoind
 
 ## Setup Vars
 GENPASS="$(date +%s | sha256sum | base64 | head -c 32 ; echo)"
 confFile=~/.safecoin/safecoin.conf
+HIGHESTBLOCK="$(wget -nv -qO - https://explorer.safecoin.org/api/blocks\?limit=1 | jq .blocks[0].height)"
 
 ### Prereq
 echo -e "Setting up prerequisites and updating the server..."
@@ -43,7 +47,7 @@ sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoco
 
 ### Fetch Params
 echo -e "Fetching Zcash-params..."
-bash -c "$(wget -O - https://raw.githubusercontent.com/Fair-Exchange/safecoin/master/zcutil/fetch-params.sh)"
+bash -c "$(wget -qO - https://raw.githubusercontent.com/Fair-Exchange/safecoin/master/zcutil/fetch-params.sh)"
 
 ### Setup Swap
 echo -e "Adding swap if needed..."
@@ -55,29 +59,44 @@ if [ ! -f /swapfile ]; then
     echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 fi
 
-### Build Daemon
-#cd ~ && git clone https://github.com/fair-exchange/safecoin --branch master --single-branch
-#cd safecoin
-#./zcutil/build.sh -j$(nproc)
-
-### Download Daemon
-echo -e "Grabbing the latest daemon..."
-if [ ! -f safecoind ]; then
+### Check if old binaries exist
+clear
+if [ -f safecoind ]; then
     echo -e "Found old binaries... Deleting them..."
     rm safecoind
     rm safecoin-cli
 fi
-wget -N https://github.com/Fair-Exchange/safewallet/releases/download/data/binary_linux.zip -O ~/binary.zip
-unzip -o ~/binary.zip -d ~
-rm ~/binary.zip
-chmod +x safecoind safecoin-cli
+
+### Prompt user to build or download
+echo -e "Would you prefer to build the daemon from source or download an existing daemon binary?"
+echo -e "1 - Build from source"
+echo -e "2 - Download binary"
+read -p "Choose: " downloadOption
+
+### Compile or Download based on user selection
+if [ "$downloadOption" == "1" ]; then
+    ### Build Daemon
+    echo -e "Begin compiling of daemon..."
+    cd ~ && git clone https://github.com/fair-exchange/safecoin --branch master --single-branch
+    cd safecoin
+    ./zcutil/build.sh -j$(nproc)
+    cd ~
+    cp safecoin/src/safecoind safecoin/src/safecoin-cli .
+    chmod +x safecoind safecoin-cli
+else
+    ### Download Daemon
+    echo -e "Grabbing the latest daemon..."
+    wget -N https://github.com/Fair-Exchange/safewallet/releases/download/data/binary_linux.zip -O ~/binary.zip
+    unzip -o ~/binary.zip -d ~
+    rm ~/binary.zip
+    chmod +x safecoind safecoin-cli
+fi
 
 ### Initial .safecoin/
 if [ ! -d ~/.safecoin ]; then
     echo -e "Created .safecoin directory..."
     mkdir .safecoin
 fi
-rm $confFile
 
 ### Download bootstrap
 if [ ! -d ~/.safecoin/blocks ]; then
@@ -91,6 +110,12 @@ fi
 if [ ! -f $confFile ]; then
     ### Grab current height
     HIGHESTBLOCK="$(wget -nv -qO - https://explorer.safecoin.org/api/blocks\?limit=1 | jq .blocks[0].height)"
+    if [ -z "$HIGHESTBLOCK" ]
+    then
+        clear
+        echo -e "Unable to fetch current block height from explorer. Please enter it manually. You can obtain it from https://explorer.safecoin.org or https://explorer.deepsky.space/"
+        read -p "Current Height: " HIGHESTBLOCK
+    fi
 
     ### Write to safecoin.conf
     touch $confFile
@@ -114,59 +139,104 @@ if [ ! -f $confFile ]; then
     fi
     echo "safepass=$GENPASS" >> $confFile
     echo "safeheight=$HIGHESTBLOCK" >> $confFile
+else 
+    clear
+    echo -e "safecoin.conf exists. Skipping..."
 fi
 
 ### Setup Service
 echo -e "Creating service file..."
 
+### Remove old service file
+if [ -f /lib/systemd/system/safecoinnode.service ]; then
+  sudo systemctl disable --now safecoinnode.service
+  sudo rm /lib/systemd/system/safecoinnode.service
+fi
+
 service="echo '[Unit]
 Description=SafeNodes daemon
 After=network-online.target
 [Service]
-ExecReload=/bin/kill -HUP $MAINPID
-ExecStart=$HOME/safecoind
-WorkingDirectory=$HOME/.safecoin
 User=$USER
-KillMode=mixed
+Group=$USER
+Type=forking
 Restart=always
-RestartSec=10
-TimeoutStopSec=10
-Nice=-20
+RestartSec=120
+RemainAfterExit=true
+ExecStart=$HOME/safecoind -daemon
 ProtectSystem=full
 [Install]
 WantedBy=multi-user.target' >> /lib/systemd/system/safecoinnode.service"
 
-echo $service
+#echo $service
 sudo sh -c "$service"
 
 ### Fire up the engines
-./safecoind -daemon > /dev/null
-sudo systemctl enable --now safecoinnode.service
+sudo systemctl enable safecoinnode.service
+sudo systemctl start safecoinnode
 
-sleep 5
-x=1
-echo "Waiting for startup to complete"
-sleep 15
-while true ; do
-    echo "Wallet is opening, please wait. This step will take few minutes ($x)"
-    sleep 1
-    x=$(( $x + 1 ))
-    ./safecoin-cli getinfo &> text.txt
-    line=$(tail -n 1 text.txt)
-    if [[ $line == *"..."* ]]; then
-        echo $line
+echo "Safecoind started... Waiting for startup to finish"
+sleep 60
+newHighestBlock="$(wget -nv -qO - https://explorer.safecoin.org/api/blocks\?limit=1 | jq .blocks[0].height)"
+currentBlock="$(~/safecoin-cli getblockcount)"
+
+### We need to add some failed start detection here with troubleshooting steps
+### error code: -28
+
+if [ -z "$newHighestBlock" ]
+then
+    echo
+    echo -e "Unable to fetch current block height from explorer. Please enter it manually. You can obtain it from https://explorer.safecoin.org or https://explorer.deepsky.space/"
+    read -p "Current Height: " newHighestBlock
+    newHighestBlockManual="$newHighestBlock"
+fi
+
+echo -e "Current Height is now $newHighestBlock"
+
+while  [ "$newHighestBlock" != "$currentBlock" ]
+do
+    clear
+    if [ -z "$newHighestBlockManual" ]
+        then
+            newHighestBlock="$(wget -nv -qO - https://explorer.safecoin.org/api/blocks\?limit=1 | jq .blocks[0].height)"
+        else
+            newHighestBlock="$newHighestBlockManual"
     fi
-    if [[ $(tail -n 15 text.txt) == *"connections"* ]]; then
-        echo
-        echo "SafeNode successfully configured and launched!"
-        echo
-        echo "SafeKey: $1"
-        echo "ParentKey: 0333b9796526ef8de88712a649d618689a1de1ed1adf9fb5ec415f31e560b1f9a3"
-        echo "SafePass: $GENPASS"
-        echo "SafeHeight: $HIGHESTBLOCK"
-        echo
-        sudo systemctl status safecoinnode
-        break
-    fi
-	rm ~/text.txt
+    currentBlock="$(~/safecoin-cli getblockcount)"
+    echo "Comparing block heights to ensure server is fully synced every 10 seconds";
+    echo "Highest: $newHighestBlock";
+    echo "Currently at: $currentBlock";
+    echo "Checking again in 10 seconds... The install will continue once it's synced.";echo
+    echo "Last 10 lines of the log for error checking...";
+    echo "===============";
+    tail -10 ~/.safecoin/debug.log
+    echo "===============";
+    echo "Just ensure the current block height is rising over time...";
+    sleep 10
 done
+
+clear
+echo "Chain is fully synced with explorer height!"
+echo
+echo "SafeNode successfully configured and launched!"
+echo
+echo "SafeKey: $1"
+echo "ParentKey: 0333b9796526ef8de88712a649d618689a1de1ed1adf9fb5ec415f31e560b1f9a3"
+echo "SafePass: $GENPASS"
+echo "SafeHeight: $HIGHESTBLOCK"
+echo
+
+### Check health of service
+sudo systemctl status safecoinnode
+
+if [ -d ~/safecoin ]
+then
+    echo -e "Cleaning up... Do you want to remove your safecoin build directory?"
+    read -p "Y/n: " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]
+        then
+            rm -rf ~/safecoin
+            echo -e "Build directory removed..."
+        fi
+fi
