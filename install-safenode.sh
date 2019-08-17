@@ -27,10 +27,26 @@ if [ -z "$1" ]
         exit
 fi
 
+### Confirm SafeKey before continuing
+if [ ! -z "$1" ]
+then
+    clear
+    echo -e "Is \"$1\" the correct SafeKey you would like to use for this installation?"
+    read -p "Y/n: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]
+        then
+            clear
+            echo -e "Please re-run the script with the correct SafeKey!"
+            exit
+        fi
+fi
+
 ### Change to home dir (just in case)
 cd ~
 
 ### Kill any existing processes
+echo -e "Stopping any existing SafeNode services..."
 sudo systemctl stop safecoinnode
 killall -9 safecoind
 
@@ -77,7 +93,12 @@ read -p "Choose: " downloadOption
 if [ "$downloadOption" == "1" ]; then
     ### Build Daemon
     echo -e "Begin compiling of daemon..."
-    cd ~ && git clone https://github.com/fair-exchange/safecoin --branch master --single-branch
+    if [ ! -d safecoin ]
+    then
+        cd ~ && git clone https://github.com/fair-exchange/safecoin --branch master --single-branch
+    else
+        cd safecoin && git pull
+    fi
     cd safecoin
     ./zcutil/build.sh -j$(nproc)
     cd ~
@@ -104,6 +125,19 @@ if [ ! -d ~/.safecoin/blocks ]; then
     wget -N https://github.com/Fair-Exchange/safewallet/releases/download/data/blockchain_txindex.zip
     unzip -o ~/blockchain_txindex.zip -d ~/.safecoin
     rm ~/blockchain_txindex.zip
+fi
+
+### Check if safecoin.conf exists and prompt user about overwriting it
+if [ -f "$confFile" ]
+then
+    clear
+    echo -e "A safecoin.conf already exists. Do you want to overwrite it?"
+    read -p "Y/n: " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]
+        then
+            rm -fv $confFile
+        fi
 fi
 
 ### Final conf setup
@@ -225,7 +259,15 @@ echo "ParentKey: 0333b9796526ef8de88712a649d618689a1de1ed1adf9fb5ec415f31e560b1f
 echo "SafePass: $GENPASS"
 echo "SafeHeight: $HIGHESTBLOCK"
 echo
-
+echo "##################################################"
+echo "Send 1 SAFE to the address below. This will power the SafeNode for 1 year!"
+### Generate address to fuel safenode
+~/safecoin-cli getnewaddress
+echo "##################################################"
+echo
+echo -e "A message of \"Validate SafeNode\" will appear when your SafeNode Is activated. This will happen roughly 10 blocks after the safeheight above."
+echo
+echo -e "Checking the safecoind service status..."
 ### Check health of service
 sudo systemctl status safecoinnode
 
@@ -240,3 +282,5 @@ then
             echo -e "Build directory removed..."
         fi
 fi
+
+exit
