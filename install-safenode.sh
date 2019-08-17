@@ -2,7 +2,7 @@
 clear
 
 ######################################
-## SafeNode Setup Tool v0.11        ##
+## SafeNode Setup Tool v0.12        ##
 ## Special thanks to:               ##
 ## @Team Safe                       ##
 ## @Safers                          ##
