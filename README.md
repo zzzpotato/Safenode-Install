@@ -1,3 +1,15 @@
+# Creating A SafeNode Paper Wallet 
+     
+Remember to store the recovery phrase or password, ideally in more than one place. Do not lose these otherwise your SafeCoins will be lost. It is not recommended to import your SafeNode private keys into a desktop wallet. After creating a paper wallet, you will need to fund the collateral address. To start receiving rewards, an amount of 10,000 SafeCoin is needed minimum. You will need a Safekey (not private key) to setup your SafeNode.
+    
+     https://safenodes.org/
+
+     https://apps.apple.com/us/app/safepay-cryptocurrency-wallet/id1465180332?ls=1
+
+     https://play.google.com/store/apps/details?id=org.safecoin.safepay 
+
+     https://safepay.safecoin.org/
+
 # SafeNode Install
 Bash script for easily installing a SafeNode on a linux vps
 
