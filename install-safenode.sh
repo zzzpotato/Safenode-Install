@@ -2,7 +2,7 @@
 clear
 
 ######################################
-## SafeNode Setup Tool v0.12        ##
+## SafeNode Setup Tool v0.13        ##
 ## Special thanks to:               ##
 ## @Team Safe                       ##
 ## @Safers                          ##
@@ -28,7 +28,8 @@ if [ -z "$1" ]
 fi
 
 ### Confirm SafeKey before continuing
-if [ ! -z "$1" ]
+length=${#1}
+if [ "$length" == 66 ]
 then
     clear
     echo -e "Is \"$1\" the correct SafeKey you would like to use for this installation?"
@@ -40,7 +41,11 @@ then
             echo -e "Please re-run the script with the correct SafeKey!"
             exit
         fi
+else
+    echo -e "Double check you have entered the correct SafeKey in full!"
+    exit
 fi
+
 
 ### Change to home dir (just in case)
 cd ~
