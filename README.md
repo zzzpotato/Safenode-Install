@@ -13,7 +13,7 @@ Remember to store the recovery phrase or password, ideally in more than one plac
 # SafeNode Install
 Bash script for easily installing a SafeNode on a linux vps
 
-Note: This script is a beta and has only been tested on ubuntu 18.04. Report any bugs and I will do my best to fix them.
+Note: This script is a beta and has only been tested on Ubuntu 16.04 (Thanks Stinkfist) & 18.04. Report any bugs and I will do my best to fix them.
 
 ## Create a sudo user so you are not running as root
 Replace username with an actual username such as "safenode"
