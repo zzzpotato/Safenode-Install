@@ -46,7 +46,6 @@ else
     exit
 fi
 
-
 ### Change to home dir (just in case)
 cd ~
 
