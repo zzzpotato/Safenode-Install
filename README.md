@@ -20,8 +20,7 @@ Replace username with an actual username such as "safenode"
 ```
 adduser username
 usermod -aG sudo username
-su username
-cd ~
+su - username
 ```
 
 ## Run the script
