@@ -31,4 +31,4 @@ bash -c "$(wget -qO - https://raw.githubusercontent.com/zzzpotato/Safenode-Insta
 
 ## Thanks
 
-If you need assistance or find an issue within the script, contact me on discord at potato#4515 and I will try to help you resolve it. 
+If you need assistance or find an issue within the script, contact me on discord at potato#9721 and I will try to help you resolve it. 
