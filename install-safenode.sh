@@ -1,63 +1,95 @@
 #!/bin/bash
-clear
 
-######################################
-## SafeNode Setup Tool v0.13        ##
-## Special thanks to:               ##
-## @Team Safe                       ##
-## @Safers                          ##
-## Oleksandr                        ##
-## Potato                           ##
-######################################
-######################################
+### Change to home dir (just in case)
+cd ~
+
+### Setup Vars
+GENPASS="$(date +%s | sha256sum | base64 | head -c 32 ; echo)"
+confFile=~/.safecoin/safecoin.conf
+HIGHESTBLOCK="$(wget -nv -qO - https://explorer.safecoin.org/api/blocks\?limit=1 | jq .blocks[0].height)"
+
+### Font Colors
+BLACK='\e[30m'
+RED='\e[91m'
+GREEN='\e[92m'
+YELLOW='\e[93m'
+BLUE='\e[94m'
+PINK='\e[95m'
+CYAN='\e[96m'
+WHITE='\e[97m'
+NC='\033[0m'
+
+### Welcome
+clear
+echo -e "${WHITE}============================================"
+echo -e "SafeNode Setup Tool ${PINK}v0.14${NC}"
+echo -e "${WHITE}Special thanks to:${NC}"
+echo -e "${CYAN}@Team Safe"
+echo -e "@Safers"
+echo -e "Miodrag"
+echo -e "Oleksandr"
+echo -e "Potato${NC}"
+echo -e "${WHITE}============================================${NC}"
+
+read -p "Press any key to begin..."
 
 ### Check user
 if [ "$EUID" -eq 0 ]
     then
         clear
-        echo -e "Warning: You should not run this as root! Create a new user with sudo permissions!\nThis can be done with (replace username with an actual username such as node):\nadduser username\nusermod -aG sudo username\nsu username\ncd ~\n\nYou will be in a new home directory. Make sure you redownload the script or move it from your /root directory!"
+        echo -e "${RED}Warning:${NC} You should not run this as root! Create a new user with sudo permissions!\nThis can be done with (replace username with an actual username such as node):\nadduser username\nusermod -aG sudo username\nsu username\ncd ~\n\nYou will be in a new home directory. Make sure you redownload the script or move it from your /root directory!"
         exit
 fi
 
-### Check if safekey was added
-if [ -z "$1" ]
+function ckLen {
+    length=${#1}
+    if [ "$length" == 66 ]
     then
-        clear
-        echo -e "No SafeKey supplied. Start over with your SafeKey included..."
+        true
+    else
+        echo -e "Double check you have entered the correct SafeKey in full!"
         exit
-fi
+    fi
+}
 
-### Confirm SafeKey before continuing
-length=${#1}
-if [ "$length" == 66 ]
-then
+function safeKeyConf {
     clear
-    echo -e "Is \"$1\" the correct SafeKey you would like to use for this installation?"
-    read -p "Y/n: " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]
-        then
-            clear
-            echo -e "Please re-run the script with the correct SafeKey!"
-            exit
-        fi
+    echo -e "Is \"${CYAN}$1${NC}\" the correct SafeKey you would like to use for this installation?"
+        read -p "Y/n: " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]
+            then
+                clear
+                echo -e "Please re-run the script with the correct SafeKey!"
+                exit
+            fi
+
+            ckLen $1
+
+}
+### Check SafeKey
+if [ -z "$1" ]
+then
+    # No SafeKey entered, ask for one
+    clear
+    read -p "Enter your SafeKey: " safeKey
+    safeKeyConf $safeKey
+elif [ ! -z "$1" ]
+then
+    # SafeKey entered
+    clear
+    safeKey=$1
+    safeKeyConf $safeKey
 else
-    echo -e "Double check you have entered the correct SafeKey in full!"
+    # Something isnt right...
+    echo -e "Unable to verify SafeKey, try again!"
     exit
 fi
-
-### Change to home dir (just in case)
-cd ~
 
 ### Kill any existing processes
 echo -e "Stopping any existing SafeNode services..."
 sudo systemctl stop safecoinnode
 killall -9 safecoind
-
-## Setup Vars
-GENPASS="$(date +%s | sha256sum | base64 | head -c 32 ; echo)"
-confFile=~/.safecoin/safecoin.conf
-HIGHESTBLOCK="$(wget -nv -qO - https://explorer.safecoin.org/api/blocks\?limit=1 | jq .blocks[0].height)"
 
 ### Prereq
 echo -e "Setting up prerequisites and updating the server..."
@@ -172,8 +204,8 @@ if [ ! -f $confFile ]; then
     echo "txindex=1" >> $confFile
     echo "daemon=1" >> $confFile
     echo "parentkey=0333b9796526ef8de88712a649d618689a1de1ed1adf9fb5ec415f31e560b1f9a3" >> $confFile
-    if echo $1; then
-        echo "safekey=$1" >> $confFile
+    if echo $safeKey; then
+        echo "safekey=$safeKey" >> $confFile
     fi
     echo "safepass=$GENPASS" >> $confFile
     echo "safeheight=$HIGHESTBLOCK" >> $confFile
@@ -182,38 +214,50 @@ else
     echo -e "safecoin.conf exists. Skipping..."
 fi
 
-### Setup Service
-echo -e "Creating service file..."
+### Choose to setup service or not
+clear
+echo -e "Would you like to setup a service to automatically start/restart safecoind on reboots/failures?"
+read -p "Y/n: " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]
+    then
+        ### Setup Service
+        echo -e "Creating service file..."
+        createdService="1"
 
-### Remove old service file
-if [ -f /lib/systemd/system/safecoinnode.service ]; then
-  sudo systemctl disable --now safecoinnode.service
-  sudo rm /lib/systemd/system/safecoinnode.service
-fi
+        ### Remove old service file
+        if [ -f /lib/systemd/system/safecoinnode.service ]; then
+        sudo systemctl disable --now safecoinnode.service
+        sudo rm /lib/systemd/system/safecoinnode.service
+        fi
 
-service="echo '[Unit]
-Description=SafeNodes daemon
-After=network-online.target
-[Service]
-User=$USER
-Group=$USER
-Type=forking
-Restart=always
-RestartSec=120
-RemainAfterExit=true
-ExecStart=$HOME/safecoind -daemon
-ProtectSystem=full
-[Install]
-WantedBy=multi-user.target' >> /lib/systemd/system/safecoinnode.service"
+        service="echo '[Unit]
+        Description=SafeNodes daemon
+        After=network-online.target
+        [Service]
+        User=$USER
+        Group=$USER
+        Type=forking
+        Restart=always
+        RestartSec=120
+        RemainAfterExit=true
+        ExecStart=$HOME/safecoind -daemon
+        ProtectSystem=full
+        [Install]
+        WantedBy=multi-user.target' >> /lib/systemd/system/safecoinnode.service"
 
-#echo $service
-sudo sh -c "$service"
+        #echo $service
+        sudo sh -c "$service"
 
-### Fire up the engines
-sudo systemctl enable safecoinnode.service
-sudo systemctl start safecoinnode
+        ### Fire up the engines
+        sudo systemctl enable safecoinnode.service
+        sudo systemctl start safecoinnode
+    else
+        echo -e "No service was created... ${CYAN}Starting daemon...${NC}"
+        ~/safecoind -daemon
+    fi
 
-echo "Safecoind started... Waiting for startup to finish"
+echo "${CYAN}Safecoind started...${NC} Waiting for startup to finish"
 sleep 60
 newHighestBlock="$(wget -nv -qO - https://explorer.safecoin.org/api/blocks\?limit=1 | jq .blocks[0].height)"
 currentBlock="$(~/safecoin-cli getblockcount)"
@@ -241,39 +285,55 @@ do
             newHighestBlock="$newHighestBlockManual"
     fi
     currentBlock="$(~/safecoin-cli getblockcount)"
-    echo "Comparing block heights to ensure server is fully synced every 10 seconds";
-    echo "Highest: $newHighestBlock";
-    echo "Currently at: $currentBlock";
-    echo "Checking again in 10 seconds... The install will continue once it's synced.";echo
-    echo "Last 10 lines of the log for error checking...";
-    echo "===============";
+    echo -e "${WHITE}Comparing block heights to ensure server is fully synced every 10 seconds${NC}";
+    echo -e "${CYAN}Highest: $newHighestBlock ${NC}";
+    echo -e "${PINK}Currently at: $currentBlock ${NC}";
+    echo -e "${WHITE}Checking again in 10 seconds... The install will continue once it's synced.";echo
+    echo -e "Last 10 lines of the log for error checking...";
+    echo -e "===============";
     tail -10 ~/.safecoin/debug.log
-    echo "===============";
-    echo "Just ensure the current block height is rising over time...";
+    echo -e "===============";
+    echo -e "Just ensure the current block height is rising over time...${NC}";
     sleep 10
 done
 
 clear
-echo "Chain is fully synced with explorer height!"
+echo -e "${WHITE}Chain is fully synced with explorer height!${NC}"
 echo
-echo "SafeNode successfully configured and launched!"
+echo -e "${PINK}SafeNode${NC}${WHITE} successfully configured and launched!${NC}"
 echo
-echo "SafeKey: $1"
-echo "ParentKey: 0333b9796526ef8de88712a649d618689a1de1ed1adf9fb5ec415f31e560b1f9a3"
-echo "SafePass: $GENPASS"
-echo "SafeHeight: $HIGHESTBLOCK"
+echo -e "${CYAN}SafeKey:${NC} ${PINK}$safeKey${NC}"
+echo -e "${CYAN}ParentKey:${NC} ${PINK}0333b9796526ef8de88712a649d618689a1de1ed1adf9fb5ec415f31e560b1f9a3${NC}"
+echo -e "${CYAN}SafePass:${NC} ${PINK}$GENPASS${NC}"
+echo -e "${CYAN}SafeHeight:${NC} ${PINK}$HIGHESTBLOCK${NC}"
 echo
-echo "##################################################"
-echo "Send 1 SAFE to the address below. This will power the SafeNode for 1 year!"
+echo -e "${WHITE}##################################################${NC}"
+echo -e "${GREEN}Send ${PINK}1${NC}${GREEN} SAFE to the address below. This will power the SafeNode for 1 year!${NC}"
 ### Generate address to fuel safenode
+echo -e "${PINK}"
 ~/safecoin-cli getnewaddress
-echo "##################################################"
+echo -e "${NC}${WHITE}"
+echo -e "##################################################"
 echo
-echo -e "A message of \"Validate SafeNode\" will appear when your SafeNode Is activated. This will happen roughly 10 blocks after the safeheight above."
+echo -e "A message of "${PINK}Validate SafeNode${NC}" ${WHITE}will appear when your SafeNode Is activated. This will happen roughly 10 blocks after the safeheight above."
 echo
-echo -e "Checking the safecoind service status..."
+echo -e "Checking the safecoind service status...${NC}"
+
 ### Check health of service
-sudo systemctl status safecoinnode
+if [ ! -z "$createdService" ]
+then
+    sudo systemctl status safecoinnode
+    echo
+    echo -e "##################################################"
+    echo
+    echo -e "${WHITE}Fetching ${PINK}getinfo${NC}${WHITE}"
+    ~/safecoin-cli getinfo
+    echo -e "${NC}"
+else
+    echo -e "${WHITE}No service was created... returning ${PINK}getinfo${NC}${WHITE}"
+    ~/safecoin-cli getinfo
+    echo -e "${NC}"
+fi
 
 if [ -d ~/safecoin ]
 then
