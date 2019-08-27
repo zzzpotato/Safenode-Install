@@ -22,7 +22,7 @@ NC='\033[0m'
 ### Welcome
 clear
 echo -e "${WHITE}============================================"
-echo -e "SafeNode Setup Tool ${PINK}v0.14${NC}"
+echo -e "SafeNode Setup Tool ${PINK}v0.14.1${NC}"
 echo -e "${WHITE}Special thanks to:${NC}"
 echo -e "${CYAN}@Team Safe"
 echo -e "@Safers"
@@ -326,12 +326,12 @@ then
     echo
     echo -e "##################################################"
     echo
-    echo -e "${WHITE}Fetching ${PINK}getinfo${NC}${WHITE}"
-    ~/safecoin-cli getinfo
+    echo -e "${WHITE}Fetching ${PINK}getnodeinfo${NC}${WHITE}"
+    ~/safecoin-cli getnodeinfo
     echo -e "${NC}"
 else
-    echo -e "${WHITE}No service was created... returning ${PINK}getinfo${NC}${WHITE}"
-    ~/safecoin-cli getinfo
+    echo -e "${WHITE}No service was created... returning ${PINK}getnodeinfo${NC}${WHITE}"
+    ~/safecoin-cli getnodeinfo
     echo -e "${NC}"
 fi
 
