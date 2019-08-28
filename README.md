@@ -23,22 +23,11 @@ usermod -aG sudo username
 su - username
 ```
 
-## Run the script with or without your SafeKey initially
+## Run the script and enter your SafeKey when prompted
 ```
 bash -c "$(wget -qO - https://raw.githubusercontent.com/zzzpotato/Safenode-Install/master/install-safenode.sh)"
 ```
-### With SafeKey
-```
-MYSAFEKEY=PASTE_YOUR_SAFE_KEY_HERE
-bash -c "$(wget -qO - https://raw.githubusercontent.com/zzzpotato/Safenode-Install/master/install-safenode.sh)" '' $MYSAFEKEY
-```
-### Alternatively 
-```
-chmod +x safe-install.sh
-sh safe-install.sh <SafeKey>
-```
-
 
 ## Thanks
 
-If you need assistance or find an issue within the script, contact me on discord at potato#9721 and I will try to help you resolve it. 
+If you need assistance or find an issue within the script, contact me on discord at potato#9721 and I will try to help you resolve it. For large issues, you may need to open an issue on the repo so it can be addressed.
