@@ -22,7 +22,7 @@ NC='\033[0m'
 ### Welcome
 clear
 echo -e "${WHITE}============================================"
-echo -e "SafeNode Setup Tool ${PINK}v0.14.1${NC}"
+echo -e "SafeNode Setup Tool ${PINK}v0.15${NC}"
 echo -e "${WHITE}Special thanks to:${NC}"
 echo -e "${CYAN}@Team Safe"
 echo -e "@Safers"
@@ -67,6 +67,22 @@ function safeKeyConf {
             ckLen $1
 
 }
+
+starting_port=8771
+ending_port=8871
+function check_port {
+    for NEXTPORT in $(seq $starting_port $ending_port); do
+        if ! sudo lsof -Pi :$NEXTPORT -sTCP:LISTEN -t >/dev/null; then
+            echo "$NEXTPORT not in use. Using it for rpcport"
+            port_to_use=$NEXTPORT
+            return $NEXTPORT
+        elif [ "$NEXTPORT" == "$ending_port" ]; then
+            echo "No port to use"
+            exit
+        fi
+    done
+}
+
 ### Check SafeKey
 if [ -z "$1" ]
 then
@@ -88,14 +104,15 @@ fi
 
 ### Kill any existing processes
 echo -e "Stopping any existing SafeNode services..."
-sudo systemctl stop safecoinnode
+sudo systemctl stop safecoinnode-$USER
 killall -9 safecoind
+### Stop old service file >= 0.14.1
+sudo systemctl stop safecoinnode &>/dev/null
 
 ### Prereq
 echo -e "Setting up prerequisites and updating the server..."
 sudo apt-get update -y
 sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool ncurses-dev unzip git python python-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils automake curl bc dc jq nano gpw -y
-
 
 ### Fetch Params
 echo -e "Fetching Zcash-params..."
@@ -187,6 +204,9 @@ if [ ! -f $confFile ]; then
         read -p "Current Height: " HIGHESTBLOCK
     fi
 
+    ### Checking ports
+    check_port
+
     ### Write to safecoin.conf
     touch $confFile
     rpcuser=$(gpw 1 30)
@@ -197,9 +217,13 @@ if [ ! -f $confFile ]; then
     echo "addnode=explorer.deepsky.space" >> $confFile
     echo "addnode=dnsseed.local.support" >> $confFile
     echo "addnode=dnsseed.fair.exchange" >> $confFile
-    echo "rpcport=8771" >> $confFile
+    echo "rpcport=$NEXTPORT" >> $confFile
+    if [ "$NEXTPORT" != 8771 ]; then
+        echo "listen=0" >> $confFile
+    else
+        echo "listen=1" >> $confFile
+    fi
     echo "port=8770" >> $confFile
-    echo "listen=1" >> $confFile
     echo "server=1" >> $confFile
     echo "txindex=1" >> $confFile
     echo "daemon=1" >> $confFile
@@ -225,10 +249,16 @@ read -p "Y/n: " -n 1 -r
         echo -e "Creating service file..."
         createdService="1"
 
-        ### Remove old service file
+        ### Remove old service file >= 0.14.1
         if [ -f /lib/systemd/system/safecoinnode.service ]; then
-        sudo systemctl disable --now safecoinnode.service
-        sudo rm /lib/systemd/system/safecoinnode.service
+        sudo systemctl disable --now safecoinnode.service &>/dev/null
+        sudo rm /lib/systemd/system/safecoinnode.service &>/dev/null
+        fi
+
+        ### Remove old service file
+        if [ -f /lib/systemd/system/safecoinnode-$USER.service ]; then
+        sudo systemctl disable --now safecoinnode-$USER.service
+        sudo rm /lib/systemd/system/safecoinnode-$USER.service
         fi
 
         service="echo '[Unit]
@@ -244,20 +274,20 @@ read -p "Y/n: " -n 1 -r
         ExecStart=$HOME/safecoind -daemon
         ProtectSystem=full
         [Install]
-        WantedBy=multi-user.target' >> /lib/systemd/system/safecoinnode.service"
+        WantedBy=multi-user.target' >> /lib/systemd/system/safecoinnode-$USER.service"
 
         #echo $service
         sudo sh -c "$service"
 
         ### Fire up the engines
-        sudo systemctl enable safecoinnode.service
-        sudo systemctl start safecoinnode
+        sudo systemctl enable safecoinnode-$USER.service
+        sudo systemctl start safecoinnode-$USER
     else
         echo -e "No service was created... ${CYAN}Starting daemon...${NC}"
         ~/safecoind -daemon
     fi
 
-echo "${CYAN}Safecoind started...${NC} Waiting for startup to finish"
+echo -e "${CYAN}Safecoind started...${NC} Waiting for startup to finish"
 sleep 60
 newHighestBlock="$(wget -nv -qO - https://explorer.safecoin.org/api/blocks\?limit=1 | jq .blocks[0].height)"
 currentBlock="$(~/safecoin-cli getblockcount)"
@@ -308,7 +338,7 @@ echo -e "${CYAN}SafePass:${NC} ${PINK}$GENPASS${NC}"
 echo -e "${CYAN}SafeHeight:${NC} ${PINK}$HIGHESTBLOCK${NC}"
 echo
 echo -e "${WHITE}##################################################${NC}"
-echo -e "${GREEN}Send ${PINK}1${NC}${GREEN} SAFE to the address below. This will power the SafeNode for 1 year!${NC}"
+echo -e "${GREEN}Send ${CYAN}1${NC}${GREEN} SAFE to the address below. This will power the SafeNode for 1 year!${NC}"
 ### Generate address to fuel safenode
 echo -e "${PINK}"
 ~/safecoin-cli getnewaddress
@@ -322,7 +352,7 @@ echo -e "Checking the safecoind service status...${NC}"
 ### Check health of service
 if [ ! -z "$createdService" ]
 then
-    sudo systemctl status safecoinnode
+    sudo systemctl --no-pager status safecoinnode-$USER
     echo
     echo -e "##################################################"
     echo
