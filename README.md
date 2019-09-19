@@ -46,7 +46,7 @@ bash -c "$(wget -qO - https://raw.githubusercontent.com/zzzpotato/Safenode-Insta
 - `~/safecoin-cli stop` - Stop Daemon
 
 5. Where can I find the steps to manually install my SafeNode?
-- https://docs.google.com/document/d/1MuZnt-9jKhSrnO75bigtXYg_d99aOn5qfN4nnqdqXbY/
+- https://safenodes.org/assets/SafeNode_-_Guide_-_v1.02.pdf
 
 ## Thanks
 
